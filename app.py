@@ -11,7 +11,10 @@ from streamlit_plotly_events import plotly_events
 DATA_DIR = Path("data")
 PROVINCE_DATA_PATH = DATA_DIR / "provinces.json"
 GEOJSON_PATH = DATA_DIR / "tr-81-il.geojson"
-GEOJSON_URL = "https://raw.githubusercontent.com/cihadturhan/geojson/master/tr-81-il.geojson"
+GEOJSON_URLS = [
+    "https://raw.githubusercontent.com/cihadturhan/geojson/main/tr-81-il.geojson",
+    "https://raw.githubusercontent.com/cihadturhan/geojson/master/tr-81-il.geojson",
+]
 
 
 @st.cache_data(show_spinner=False)
@@ -23,10 +26,24 @@ def load_province_data() -> List[Dict[str, str]]:
 @st.cache_data(show_spinner=False)
 def load_geojson() -> Dict[str, Any]:
     if not GEOJSON_PATH.exists():
-        response = requests.get(GEOJSON_URL, timeout=20)
-        response.raise_for_status()
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        GEOJSON_PATH.write_text(response.text, encoding="utf-8")
+        last_error = None
+        for url in GEOJSON_URLS:
+            try:
+                response = requests.get(url, timeout=20)
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                last_error = exc
+                continue
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            GEOJSON_PATH.write_text(response.text, encoding="utf-8")
+            last_error = None
+            break
+        if last_error is not None:
+            st.error(
+                "İl sınırlarını içeren GeoJSON dosyası indirilemedi. "
+                "Lütfen ağ bağlantınızı kontrol edip tekrar deneyin."
+            )
+            raise RuntimeError("GeoJSON download failed") from last_error
     with GEOJSON_PATH.open("r", encoding="utf-8") as file:
         return json.load(file)
 
